@@ -16,8 +16,8 @@ type NeuralNetwork struct {
 	inputSize             int
 	hiddenSize            int
 	outputSize            int
-	inputToHiddenWeights  [][]int
-	hiddenToOutputWeights [][]int
+	inputToHiddenWeights  [][]float64
+	hiddenToOutputWeights [][]float64
 }
 
 type Player int
@@ -38,25 +38,55 @@ func NewNeuralNetwork(inputSize, hiddenSize, outputSize int) *NeuralNetwork {
 	return neuralNetwork
 }
 
+/*
+* Forward Propagation: Calculate the output of the network, for a given input using sigmoid to activate
+* Product from Input to Hidden Layer
+* Product from Hidden Layer to Output Layer
+ */
+func (nn *NeuralNetwork) forward(input []float64) []float64 {
+	hidden := dotProduct(input, nn.inputToHiddenWeights)
+	hidden = applySigmoid(hidden)
+	output := dotProduct(hidden, nn.hiddenToOutputWeights)
+	output = applySigmoid(output)
+	return output
+}
+
 func (nn *NeuralNetwork) initializeWeights() {
-	nn.inputToHiddenWeights = make([][]int, nn.inputSize)
-	nn.hiddenToOutputWeights = make([][]int, nn.hiddenSize)
+	nn.inputToHiddenWeights = make([][]float64, nn.inputSize)
+	nn.hiddenToOutputWeights = make([][]float64, nn.hiddenSize)
 
 	// Weights connecting the input layer with the hidden Layer initializing with random number between 0 - 99
 	for i := 0; i < nn.inputSize; i++ {
-		nn.inputToHiddenWeights[i] = make([]int, nn.hiddenSize)
+		nn.inputToHiddenWeights[i] = make([]float64, nn.hiddenSize)
 		for j := 0; j < nn.hiddenSize; j++ {
-			nn.inputToHiddenWeights[i][j] = rand.Intn(100)
+			nn.inputToHiddenWeights[i][j] = rand.Float64()
 		}
 	}
 
 	// Weights connecting the hidden layer with the output layer initializing with random number between 0 - 99
 	for i := 0; i < nn.hiddenSize; i++ {
-		nn.hiddenToOutputWeights[i] = make([]int, nn.outputSize)
+		nn.hiddenToOutputWeights[i] = make([]float64, nn.outputSize)
 		for j := 0; j < nn.outputSize; j++ {
-			nn.hiddenToOutputWeights[i][j] = rand.Intn(100)
+			nn.hiddenToOutputWeights[i][j] = rand.Float64()
 		}
 	}
+}
+
+// This function returns the product of a vector and a matrix
+func dotProduct(vector []float64, matrix [][]float64) []float64 {
+	if len(vector) != len(matrix) {
+		panic("Vector and matrix dimensions do not match")
+	}
+
+	result := make([]float64, len(matrix[0]))
+
+	for i := 0; i < len(matrix[0]); i++ {
+		for j := 0; j < len(vector); j++ {
+			result[i] += vector[j] * matrix[j][i]
+		}
+	}
+
+	return result
 }
 
 func NewGame() *Game {
@@ -84,10 +114,10 @@ func (g *Game) printBoard() {
 }
 
 /*
-MakeMove represents a move made by a player in the game.
+	MakeMove represents a move made by a player in the game.
 
-position: represents the position in the board.
-player: 0 to represent Human and 1 to represent IA
+	position: represents the position in the board.
+	player: 0 to represent Human and 1 to represent IA
 */
 
 func (g *Game) makeMove(position int, player Player) bool {
@@ -154,34 +184,84 @@ func (g *Game) checkWinner() Player {
 }
 
 /**
- * Activation Function
+ * Activation Function, sigmoid is ALWAYS give you a value between 0 and 1, based on the X
  */
 func sigmoid(x float64) float64 {
 	return 1.0 / (1 + math.Exp(-x))
 }
 
+func applySigmoid(vector []float64) []float64 {
+	for i := range vector {
+		vector[i] = sigmoid(vector[i])
+	}
+	return vector
+}
+
 //TODO: Implement derivative
 
 func main() {
+	var neuralNetwork = NewNeuralNetwork(9, 10, 9)
 	println("Game Starting...")
+
 	game := NewGame()
+
 	for game.checkWinner() == 0 && !game.isFull() {
-		isPLayerPositionValid := false
-		//Force user to play in the right position
-		var playerMove int
-		for !isPLayerPositionValid {
-			fmt.Print("Enter your move (0-8): ")
-			_, err := fmt.Scan(&playerMove)
-			if err != nil {
-				return
-			}
-			isPLayerPositionValid = game.makeMove(playerMove, PlayerHuman)
-			if !isPLayerPositionValid {
-				fmt.Println("Position Invalid")
-			}
-		}
+		//force user to play in right position
+		playerTurn(game)
+
 		game.printBoard()
-		fmt.Println("---- IA Has Played ----")
+		// AI play in a random position
+		aiTurn(game, neuralNetwork)
+
+		game.printBoard()
+		//Status of The game
+		checkWinner(game)
+	}
+}
+
+func playerTurn(game *Game) {
+	isPLayerPositionValid := false
+	var playerMove int
+	for !isPLayerPositionValid {
+		fmt.Print("Enter your move (0-8): ")
+		_, err := fmt.Scan(&playerMove)
+		if err != nil {
+			return
+		}
+		isPLayerPositionValid = game.makeMove(playerMove, PlayerHuman)
+		if !isPLayerPositionValid {
+			fmt.Println("Position Invalid")
+		}
+	}
+}
+
+func aiTurn(game *Game, network *NeuralNetwork) {
+	// Input
+	// Convert the input to Float64
+	boardInput := make([]float64, len(game.board))
+
+	for i, value := range game.board {
+		boardInput[i] = float64(value)
+	}
+
+	moveProbabilities := network.forward(boardInput)
+	var validMoves []int
+	for i, value := range game.board {
+		if value == PositionNotPlayed {
+			validMoves = append(validMoves, i)
+		}
+	}
+	var bestMove = -1
+	bestMoveValue := -math.MaxFloat64
+	for _, move := range validMoves {
+		if moveProbabilities[move] > bestMoveValue {
+			bestMoveValue = moveProbabilities[move]
+			bestMove = move
+		}
+	}
+
+	if bestMove == -1 {
+		fmt.Println("---- IA Has Played Randomly----")
 		var AIMove int
 		IsAIPositionValid := false
 		for !IsAIPositionValid && !game.isFull() && game.checkWinner() == 0 {
@@ -189,14 +269,16 @@ func main() {
 			IsAIPositionValid = game.makeMove(AIMove, PlayerAI)
 			//TODO
 		}
-		game.printBoard()
-
-		if game.checkWinner() == PlayerHuman {
-			fmt.Println("Human Rules!!")
-		} else if game.checkWinner() == PlayerAI {
-			fmt.Println("AI Is Coming Baby!!")
-		}
-
+	} else {
+		fmt.Println("---- IA Has Played Based on Probabilities ----")
+		game.makeMove(bestMove, PlayerAI)
 	}
+}
 
+func checkWinner(game *Game) {
+	if game.checkWinner() == PlayerHuman {
+		fmt.Println("Human Rules!!")
+	} else if game.checkWinner() == PlayerAI {
+		fmt.Println("AI Is Coming Baby!!")
+	}
 }
