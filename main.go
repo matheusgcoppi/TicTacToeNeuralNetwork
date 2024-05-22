@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -49,6 +50,39 @@ func (nn *NeuralNetwork) forward(input []float64) []float64 {
 	output := dotProduct(hidden, nn.hiddenToOutputWeights)
 	output = applySigmoid(output)
 	return output
+}
+
+/*
+* back propagation:
+* - Loss Function: Mean Squared Error(MSE)
+* - Propagate the error backwards in the network
+* - Updating the weights
+ */
+func backPropagation(input, target, output []float64) {
+
+}
+
+/*
+* Mean Squared Error Loss Function
+* MSE = (1/n) * Σ(y_i - ŷ_i)²
+* Calculate how much the network got it wrong
+ */
+func meanSquaredError(output, target []float64) (float64, error) {
+	// verify if the length is equal
+	if len(output) != len(target) {
+		return 0, errors.New("the length of output and target slices must be the same")
+	}
+	var sum float64
+	n := float64(len(output))
+	for i := range output {
+		// calculate the difference between output and target value
+		diff := output[i] - target[i]
+		// sum all the squared differences
+		sum += diff * diff
+	}
+	// divide the sum by the length of output
+	mse := sum / n
+	return mse, nil
 }
 
 func (nn *NeuralNetwork) initializeWeights() {
